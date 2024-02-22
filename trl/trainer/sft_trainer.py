@@ -475,7 +475,7 @@ class SFTTrainer(Trainer):
                 f"inspect dataset other columns (in this case {extra_columns}), you can subclass `DataCollatorForLanguageModeling` in case you used the default collator and create your own data collator in order to inspect the unused dataset columns."
             )
 
-        if 'input' in dataset.column_names['train'] and 'output' in dataset.column_names['train']:
+        if 'input' in dataset.column_names and 'output' in dataset.column_names:
             tokenize_func= tokenize_input_output
         else:
             tokenize_func = tokenize
