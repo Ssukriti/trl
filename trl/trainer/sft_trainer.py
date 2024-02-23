@@ -170,10 +170,8 @@ class SFTTrainer(Trainer):
                 "You passed a `DataCollatorForCompletionOnlyLM` to the SFTTrainer. This is not compatible with the `packing` argument."
             )
 
-        if not packing and formatting_func is None and dataset_text_field is None and data_collator is not None and not isinstance(data_collator, DataCollatorForSeq2Seq):
-            raise ValueError(
-                "If no formatting_func / dataset_text_field provided, the data_collator should be a `DataCollatorForSeq2Seq` object"
-            )
+        # TODO: Add proper validation for collator compatability when not padding
+        # with no format func and no dataset text field
 
         if is_peft_available() and peft_config is not None:
             if not isinstance(peft_config, PeftConfig):

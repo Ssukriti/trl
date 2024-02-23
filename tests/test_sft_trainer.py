@@ -489,8 +489,6 @@ class SFTTrainerTester(unittest.TestCase):
     def test_sft_trainer_with_model_input_output_dataset(self):
         # NOTE: These cases should be merged into the test above once this PR is stable.
         # If the dataset doesn't have input/output keys, it should raise a KeyError
-        # TODO: should the input/output fields by a param? Doing so would probably be
-        # more in line with the dataset_text_field arg...
         with tempfile.TemporaryDirectory() as tmp_dir:
             training_args = TrainingArguments(
                 output_dir=tmp_dir,
@@ -526,20 +524,6 @@ class SFTTrainerTester(unittest.TestCase):
             trainer.train()
             assert trainer.state.log_history[(-1)]["train_loss"] is not None
             assert "model.safetensors" in os.listdir(tmp_dir + "/checkpoint-1")
-
-            # but this should only work if we are using the seq2seq collator
-            collator = DataCollatorForCompletionOnlyLM("### Response:\n", tokenizer=self.tokenizer, mlm=False)
-            with pytest.raises(ValueError):
-                _ = SFTTrainer(
-                    model=self.model,
-                    args=training_args,
-                    train_dataset=dataset_with_input_output,
-                    dataset_text_field=None,
-                    formatting_func=None,
-                    max_seq_length=16,
-                    packing=False,
-                    data_collator=collator,
-                )
 
     def test_sft_trainer_with_multiple_eval_datasets(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -662,9 +646,6 @@ class SFTTrainerTester(unittest.TestCase):
         non_masked_tokens2 = input_ids[1][labels[1] != -100]
         result_text2 = tokenizer.decode(non_masked_tokens2)
         assert result_text2 == " I should not be masked. I should not be masked too."
-
-    def test_sft_trainer_with_no_packing_or_formatting_or_dataset_text_field():
-        pass
 
     def test_sft_trainer_infinite_with_model(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
