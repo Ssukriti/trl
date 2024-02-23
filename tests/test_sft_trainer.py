@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 import torch
 from datasets import Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
+from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForSeq2Seq, TrainingArguments
 
 from trl import SFTTrainer
 from trl.import_utils import is_peft_available
@@ -486,6 +486,61 @@ class SFTTrainerTester(unittest.TestCase):
 
             assert "model.safetensors" in os.listdir(tmp_dir + "/checkpoint-1")
 
+    def test_sft_trainer_with_model_input_output_dataset(self):
+        # NOTE: These cases should be merged into the test above once this PR is stable.
+        # If the dataset doesn't have input/output keys, it should raise a KeyError
+        # TODO: should the input/output fields by a param? Doing so would probably be
+        # more in line with the dataset_text_field arg...
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            training_args = TrainingArguments(
+                output_dir=tmp_dir,
+                dataloader_drop_last=True,
+                evaluation_strategy="steps",
+                max_steps=2,
+                save_steps=1,
+                per_device_train_batch_size=2,
+            )
+            with pytest.raises(KeyError):
+                _ = SFTTrainer(
+                    model=self.model,
+                    args=training_args,
+                    train_dataset=self.dummy_dataset,
+                    dataset_text_field=None,
+                    formatting_func=None,
+                    max_seq_length=16,
+                    packing=False,
+                )
+
+            # if we have input/output cols, then things should work without issue
+            dataset_with_input_output = self.dummy_dataset.rename_column("question", "input").rename_column("answer", "output")
+            trainer = SFTTrainer(
+                model=self.model,
+                args=training_args,
+                train_dataset=dataset_with_input_output,
+                dataset_text_field=None,
+                formatting_func=None,
+                max_seq_length=16,
+                packing=False,
+            )
+            assert isinstance(trainer.data_collator, DataCollatorForSeq2Seq)
+            trainer.train()
+            assert trainer.state.log_history[(-1)]["train_loss"] is not None
+            assert "model.safetensors" in os.listdir(tmp_dir + "/checkpoint-1")
+
+            # but this should only work if we are using the seq2seq collator
+            collator = DataCollatorForCompletionOnlyLM("### Response:\n", tokenizer=self.tokenizer, mlm=False)
+            with pytest.raises(ValueError):
+                _ = SFTTrainer(
+                    model=self.model,
+                    args=training_args,
+                    train_dataset=dataset_with_input_output,
+                    dataset_text_field=None,
+                    formatting_func=None,
+                    max_seq_length=16,
+                    packing=False,
+                    data_collator=collator,
+                )
+
     def test_sft_trainer_with_multiple_eval_datasets(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             training_args = TrainingArguments(
@@ -607,6 +662,9 @@ class SFTTrainerTester(unittest.TestCase):
         non_masked_tokens2 = input_ids[1][labels[1] != -100]
         result_text2 = tokenizer.decode(non_masked_tokens2)
         assert result_text2 == " I should not be masked. I should not be masked too."
+
+    def test_sft_trainer_with_no_packing_or_formatting_or_dataset_text_field():
+        pass
 
     def test_sft_trainer_infinite_with_model(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
